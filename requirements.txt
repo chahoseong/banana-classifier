@@ -1,10 +1,12 @@
+# Banana Ripe Classifier Dependencies
+# Python Version: 3.13.11
+
+streamlit
+numpy
 opencv-python
-pillow
-tqdm
+Pillow
 torch
 torchvision
 scikit-learn
-matplotlib
-seaborn
+lightgbm
 pandas
-jupyter
