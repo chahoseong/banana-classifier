@@ -1,3 +1,4 @@
+
 # 🍌 Banana Ripe Classifier - TRD (Technical Requirements Document)
 
 이 문서는 바나나 숙성도 분류 시스템의 기술적 설계와 구현 세부 사항을 정의합니다.
