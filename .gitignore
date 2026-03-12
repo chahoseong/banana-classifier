@@ -212,5 +212,3 @@ __marimo__/
 *.pkl
 *.onnx
 
-# 대용량 이미지 데이터셋 폴더
-dataset/
