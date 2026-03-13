@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, GridSearchCV
@@ -11,7 +12,7 @@ except ImportError:
     def calculate_metrics(*args, **kwargs): pass
     def plot_confusion_matrix(*args, **kwargs): pass
 
-def train_and_optimize_knn(csv_path='features.csv'):
+def train_and_optimize_knn(csv_path='ml/artifacts/features.csv'):
     """
     추출된 특징(features.csv) 데이터를 불러와 K-Nearest Neighbors(KNN) 모델을 학습하고 
     하이퍼파라미터(K값)를 최적화합니다.
@@ -116,8 +117,19 @@ def train_and_optimize_knn(csv_path='features.csv'):
     plt.title('KNN Baseline Confusion Matrix')
     
     plt.tight_layout()
-    plt.savefig('baseline_report.png', dpi=300)
-    print("\n[완료] 혼동 행렬 시각화 결과가 'baseline_report.png'로 저장되었습니다.")
+    report_path = os.path.join('ml', 'artifacts', 'baseline_report.png')
+    os.makedirs(os.path.dirname(report_path), exist_ok=True)
+    plt.savefig(report_path, dpi=300)
+    print(f"\n[??] ?? ?? ??? ??? '{report_path}'? ???????.")
+    
+    # 7. 모델 및 스케일러 저장 (추가)
+    import joblib
+    save_path = os.path.join('ml', 'artifacts')
+    os.makedirs(save_path, exist_ok=True)
+    
+    joblib.dump(best_model, os.path.join(save_path, 'knn_model.pkl'))
+    joblib.dump(scaler, os.path.join(save_path, 'scaler.pkl'))
+    print(f"\n✅ 모델 및 스케일러가 '{save_path}'에 저장되었습니다.")
     
 if __name__ == "__main__":
     train_and_optimize_knn()

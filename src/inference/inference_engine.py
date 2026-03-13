@@ -1,5 +1,6 @@
 import numpy as np
 from src.models.base_model import BaseModel
+from src.models.ml_baseline import MLBaselineModel
 
 class DummyModel(BaseModel):
     """
