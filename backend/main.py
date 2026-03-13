@@ -14,9 +14,6 @@ from typing import Optional
 # Set up paths
 backend_dir = Path(__file__).resolve().parent
 project_root = backend_dir.parent
-LOW_CONFIDENCE_DIR = project_root / 'dataset' / 'low_confidence'
-LOW_CONFIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-
 # Import BananaGatekeeper
 import sys
 if str(backend_dir) not in sys.path:
@@ -41,18 +38,6 @@ class PredictionResponse(BaseModel):
     status: Optional[str]
     confidence: float
     message: str
-
-def save_monitoring_image(image_bgr: np.ndarray, prefix: str):
-    """Background task to save images for monitoring/retraining"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    unique_id = str(uuid.uuid4())[:6]
-    filename = f"{timestamp}_{unique_id}_{prefix}.jpg"
-    filepath = LOW_CONFIDENCE_DIR / filename
-    try:
-        cv2.imwrite(str(filepath), image_bgr)
-        print(f"Saved monitoring image: {filepath}")
-    except Exception as e:
-        print(f"Failed to save image: {e}")
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_ripeness(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
@@ -85,14 +70,6 @@ async def predict_ripeness(background_tasks: BackgroundTasks, file: UploadFile =
         is_banana, confidence = gatekeeper.predict(image_bgr)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gatekeeper error: {e}")
-
-    # 2. Monitoring: save images if confidence is low (ambiguous results)
-    # This helps collect hard examples for retraining later
-    ambiguous_threshold = 0.85
-    if is_banana and confidence < ambiguous_threshold:
-        background_tasks.add_task(save_monitoring_image, image_bgr, "amb_banana")
-    elif not is_banana and confidence < ambiguous_threshold:
-        background_tasks.add_task(save_monitoring_image, image_bgr, "amb_not_banana")
 
     end_time = time.time()
     latency_ms = (end_time - start_time) * 1000
