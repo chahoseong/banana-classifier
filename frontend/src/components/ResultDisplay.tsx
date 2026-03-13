@@ -12,6 +12,7 @@ const statusConfig = {
   overripe: { color: 'border-banana-overripe', text: 'text-banana-overripe', bg: 'bg-banana-overripe/10', label: '너무 익음 (Overripe)' },
   dispose: { color: 'border-banana-dispose', text: 'text-banana-dispose', bg: 'bg-banana-dispose/10', label: '폐기 권장 (Dispose)' },
   none: { color: 'border-slate-500', text: 'text-slate-500', bg: 'bg-slate-500/10', label: '인식 중...' },
+  checking: { color: 'border-blue-500', text: 'text-blue-500', bg: 'bg-blue-500/10', label: '상태 분석 중...' },
 };
 
 const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, error }) => {
@@ -31,8 +32,8 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, error }) => {
     );
   }
 
-  const currentStatus = result.is_banana ? result.status : 'none';
-  const config = statusConfig[currentStatus as keyof typeof statusConfig];
+  const currentStatus = (result.is_banana ? result.status : 'none') || 'none';
+  const config = statusConfig[currentStatus as keyof typeof statusConfig] || statusConfig.none;
 
   return (
     <div className={`w-full mt-6 border-2 ${config.color} ${config.bg} p-6 rounded-2xl transition-all duration-500 ease-in-out shadow-lg`}>
