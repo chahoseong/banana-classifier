@@ -10,3 +10,7 @@ torchvision
 scikit-learn
 lightgbm
 pandas
+joblib
+matplotlib
+seaborn
+streamlit-webrtc
