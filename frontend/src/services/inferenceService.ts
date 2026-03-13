@@ -5,7 +5,7 @@ export interface PredictionResult {
   message: string;
 }
 
-const API_BASE_URL = 'http://localhost:8000'; // FastAPI default port
+const API_BASE_URL = 'http://127.0.0.1:8000'; // Use IP instead of localhost for Windows reliability
 
 export async function predictBanana(imageBlob: Blob): Promise<PredictionResult> {
   const formData = new FormData();
