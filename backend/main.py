@@ -119,4 +119,5 @@ async def predict_ripeness(background_tasks: BackgroundTasks, file: UploadFile =
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+    # Change from "backend.main:app" to "main:app" because we run from the backend folder
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
