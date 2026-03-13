@@ -212,6 +212,7 @@ __marimo__/
 *.pt
 *.onnx
 
-# weights/ 디렉토리의 모델 파일은 허용
+# weights/ 디렉토리 및 ml/artifacts/ 디렉토리의 모델 파일은 허용
 !weights/*.pth
+!ml/artifacts/*.pth
 
