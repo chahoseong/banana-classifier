@@ -1,18 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import CameraStreamer from './components/CameraStreamer';
 import ResultDisplay from './components/ResultDisplay';
-import { PredictionResult } from './services/inferenceService';
-import { Banana, Scan, Info, ChevronDown, Cpu } from 'lucide-react';
-
-const AVAILABLE_MODELS = [
-  { id: 'baseline', name: 'Baseline (KNN)', description: '기본 색상 분석 모델' },
-  { id: 'cnn_mobilenet', name: 'MobileNetV2 (CNN)', description: '딥러닝 고정밀 모델' },
-];
+import { PredictionResult, getAvailableModels, ModelInfo } from './services/inferenceService';
+import { Banana, Scan, Info, ChevronDown, Cpu, Loader2 } from 'lucide-react';
 
 function App() {
   const [result, setResult] = useState<PredictionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedModelId, setSelectedModelId] = useState(AVAILABLE_MODELS[0].id);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState('');
+  const [isLoadingModels, setIsLoadingModels] = useState(true);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        setIsLoadingModels(true);
+        const availableModels = await getAvailableModels();
+        setModels(availableModels);
+        if (availableModels.length > 0) {
+          setSelectedModelId(availableModels[0].id);
+        }
+      } catch (err) {
+        console.error('Failed to load models:', err);
+        setError('모델 리스트를 불러오는 데 실패했습니다.');
+      } finally {
+        setIsLoadingModels(false);
+      }
+    };
+    fetchModels();
+  }, []);
 
   const handleResult = (newResult: PredictionResult) => {
     setResult(newResult);
@@ -66,18 +82,27 @@ function App() {
               </div>
             </div>
             <div className="relative group">
-              <select 
-                value={selectedModelId}
-                onChange={(e) => setSelectedModelId(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-xl px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500/50 transition-all cursor-pointer"
-              >
-                {AVAILABLE_MODELS.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name} - {model.description}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none group-focus-within:text-yellow-500 transition-colors" />
+              {isLoadingModels ? (
+                <div className="w-full bg-slate-900 border border-slate-700 text-slate-500 text-sm rounded-xl px-4 py-3 flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading models...
+                </div>
+              ) : (
+                <>
+                  <select 
+                    value={selectedModelId}
+                    onChange={(e) => setSelectedModelId(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-xl px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500/50 transition-all cursor-pointer"
+                  >
+                    {models.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name} - {model.description}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none group-focus-within:text-yellow-500 transition-colors" />
+                </>
+              )}
             </div>
           </div>
         </section>

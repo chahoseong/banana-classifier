@@ -28,3 +28,22 @@ export async function predictBanana(imageBlob: Blob, modelId: string = 'baseline
     throw error;
   }
 }
+export interface ModelInfo {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+}
+
+export async function getAvailableModels(): Promise<ModelInfo[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/models`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch models: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Fetch Models Error:', error);
+    throw error;
+  }
+}
