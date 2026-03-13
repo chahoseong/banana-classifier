@@ -28,30 +28,57 @@ if str(project_root) not in sys.path:
 from src.inference import BananaGatekeeper
 import joblib
 from ml.src.preprocessing.image_processor import process_image
+from models.cnn_model import BananaCNNModel
+import torch
+from torchvision import transforms
+from PIL import Image
+from fastapi import Form
 
 # Global instances
 gatekeeper = None
-ripeness_model = None
+ripeness_model_baseline = None
+ripeness_model_cnn = None
+
+# CNN Preprocessing Transform
+cnn_transforms = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225]),
+])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global gatekeeper, ripeness_model
+    global gatekeeper, ripeness_model_baseline, ripeness_model_cnn
     print("Initializing Models...")
     
     # 1. Gatekeeper (YOLO)
     gatekeeper = BananaGatekeeper(model_name='yolo26n.pt')
     
-    # 2. Ripeness Model (scikit-learn)
-    model_path = project_root / 'ml' / 'artifacts' / 'banana_model_latest.joblib'
-    if model_path.exists():
-        ripeness_model = joblib.load(str(model_path))
-        print(f"Ripeness model loaded from {model_path}")
-    else:
-        print(f"Warning: Ripeness model not found at {model_path}")
-        
+    # 2. Baseline Model (KNN)
+    baseline_path = project_root / 'ml' / 'artifacts' / 'banana_model_latest.joblib'
+    if baseline_path.exists():
+        ripeness_model_baseline = joblib.load(str(baseline_path))
+        print(f"Baseline model loaded from {baseline_path}")
+    
+    # 3. CNN Model (MobileNetV2)
+    cnn_path = project_root / 'weights' / 'mobilenet_v2_ep14_acc85_0312.pth'
+    if cnn_path.exists():
+        try:
+            ripeness_model_cnn = BananaCNNModel(num_classes=4)
+            checkpoint = torch.load(str(cnn_path), map_location='cpu', weights_only=False)
+            # Handle both raw state_dict and checkpoint dict
+            state_dict = checkpoint['model_state_dict'] if 'model_state_dict' in checkpoint else checkpoint
+            ripeness_model_cnn.load_state_dict(state_dict)
+            ripeness_model_cnn.eval()
+            print(f"CNN model loaded from {cnn_path}")
+        except Exception as e:
+            print(f"Error loading CNN model: {e}")
+            
     yield
     gatekeeper = None
-    ripeness_model = None
+    ripeness_model_baseline = None
+    ripeness_model_cnn = None
 
 app = FastAPI(title="Banana Ripe Checker API", lifespan=lifespan)
 
@@ -77,6 +104,23 @@ async def health_check():
     return {"status": "ok", "message": "Banana Ripe Checker API is running"}
 
 
+@app.get("/models")
+async def get_models():
+    return [
+        {
+            "id": "baseline",
+            "name": "Baseline Model (KNN)",
+            "description": "이미지 색상 분포를 기반으로 한 기본 분석 모델",
+            "type": "classic_ml"
+        },
+        {
+            "id": "cnn_mobilenet",
+            "name": "MobileNetV2 (CNN)",
+            "description": "딥러닝 알고리즘을 사용한 고정밀 분석 모델",
+            "type": "deep_learning"
+        }
+    ]
+
 class PredictionResponse(BaseModel):
     is_banana: bool
     status: Optional[str]
@@ -84,7 +128,11 @@ class PredictionResponse(BaseModel):
     message: str
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict_ripeness(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def predict_ripeness(
+    background_tasks: BackgroundTasks, 
+    file: UploadFile = File(...),
+    model_id: str = Form("baseline")
+):
     start_time = time.time()
     
     if not file.content_type.startswith("image/"):
@@ -98,6 +146,7 @@ async def predict_ripeness(background_tasks: BackgroundTasks, file: UploadFile =
         if image_bgr is None:
             raise HTTPException(status_code=400, detail="Could not decode image.")
             
+        # Keep original for potential reuse, but resize for inference
         h, w = image_bgr.shape[:2]
         if h != 300 or w != 300:
             image_bgr = cv2.resize(image_bgr, (300, 300))
@@ -108,19 +157,12 @@ async def predict_ripeness(background_tasks: BackgroundTasks, file: UploadFile =
     if gatekeeper is None:
         raise HTTPException(status_code=500, detail="Gatekeeper is not loaded.")
 
-    # 1. is_banana check using the Gatekeeper KNN model
+    # 1. is_banana check using YOLO
     try:
-        # predict returns boolean is_banana and a confidence score
         is_banana, confidence = gatekeeper.predict(image_bgr)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gatekeeper error: {e}")
 
-    end_time = time.time()
-    latency_ms = (end_time - start_time) * 1000
-    if latency_ms > 300:
-        print(f"Warning: Latency {(latency_ms):.2f}ms exceeded budget")
-
-    # 3. Formulate the response according to FE guidelines
     if not is_banana:
         return PredictionResponse(
             is_banana=False,
@@ -128,38 +170,47 @@ async def predict_ripeness(background_tasks: BackgroundTasks, file: UploadFile =
             confidence=0.0, 
             message="바나나를 카메라 영역에 비춰주세요."
         )
-    else:
-        # Start ripeness classification
-        status = "checking"
-        prediction_message = "바나나 인식 완료! 상태 분석 중..."
-        
-        if ripeness_model is not None:
-            try:
-                # 1. Image processing (Masking + Feature Extraction)
-                # Note: Ripeness model expects 6 features (Mean HSV, Std HSV)
-                features = process_image(image_bgr)
+    
+    # 2. Ripeness classification based on model_id
+    status = "checking"
+    prediction_message = f"바나나 인식 완료 ({model_id})! 상태 분석 중..."
+    
+    try:
+        if model_id == "cnn_mobilenet":
+            if ripeness_model_cnn is not None:
+                # Convert BGR to RGB PIL Image for transforms
+                image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(image_rgb)
+                input_tensor = cnn_transforms(pil_img).unsqueeze(0)
                 
-                # 2. Predict status
-                # Prediction returns the class name string directly if classes were provided to sklearn
-                pred_status = ripeness_model.predict(features.reshape(1, -1))[0]
+                status, confidence = ripeness_model_cnn.predict(input_tensor)
+                prediction_message = f"CNN 분석 완료: {status}"
+            else:
+                prediction_message = "CNN 모델이 로드되지 않았습니다."
+        else: # Default or "baseline"
+            if ripeness_model_baseline is not None:
+                features = process_image(image_bgr)
+                pred_status = ripeness_model_baseline.predict(features.reshape(1, -1))[0]
                 status = str(pred_status)
                 
-                # 3. Get confidence (probability)
-                if hasattr(ripeness_model, "predict_proba"):
-                    probs = ripeness_model.predict_proba(features.reshape(1, -1))[0]
+                if hasattr(ripeness_model_baseline, "predict_proba"):
+                    probs = ripeness_model_baseline.predict_proba(features.reshape(1, -1))[0]
                     confidence = float(np.max(probs))
                 
                 prediction_message = f"숙성도 분석 완료: {status}"
-            except Exception as e:
-                print(f"Ripeness prediction error: {e}")
-                prediction_message = "인식은 되었으나 숙성도 분석 중 오류가 발생했습니다."
+            else:
+                prediction_message = "베이스라인 모델이 로드되지 않았습니다."
+                
+    except Exception as e:
+        print(f"Prediction error ({model_id}): {e}")
+        prediction_message = f"인식은 되었으나 {model_id} 분석 중 오류가 발생했습니다."
 
-        return PredictionResponse(
-            is_banana=True,
-            status=status,
-            confidence=confidence,
-            message=prediction_message
-        )
+    return PredictionResponse(
+        is_banana=True,
+        status=status,
+        confidence=confidence,
+        message=prediction_message
+    )
 
 if __name__ == "__main__":
     import uvicorn
