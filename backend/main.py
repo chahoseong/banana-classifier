@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
         print(f"Baseline model loaded from {baseline_path}")
     
     # 3. CNN Model (MobileNetV2)
-    cnn_path = project_root / 'weights' / 'mobilenet_v2_ep14_acc85_0312.pth'
+    cnn_path = project_root / 'ml' / 'artifacts' / 'banana_cnn_v1.pth'
     if cnn_path.exists():
         try:
             ripeness_model_cnn = BananaCNNModel(num_classes=4)
@@ -164,6 +164,7 @@ async def predict_ripeness(
         raise HTTPException(status_code=500, detail=f"Gatekeeper error: {e}")
 
     if not is_banana:
+        print(f"[Prediction] No banana detected (Confidence: {confidence:.2f})", flush=True)
         return PredictionResponse(
             is_banana=False,
             status=None,
@@ -204,6 +205,9 @@ async def predict_ripeness(
     except Exception as e:
         print(f"Prediction error ({model_id}): {e}")
         prediction_message = f"인식은 되었으나 {model_id} 분석 중 오류가 발생했습니다."
+
+
+    print(f"[Prediction] Model: {model_id}, Result: {status}, Confidence: {confidence:.2f}", flush=True)
 
     return PredictionResponse(
         is_banana=True,

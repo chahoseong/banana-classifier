@@ -13,6 +13,7 @@ export async function predictBanana(imageBlob: Blob, modelId: string = 'baseline
   formData.append('model_id', modelId);
 
   try {
+    console.log(`[Inference] Requesting prediction with model: ${modelId}`);
     const response = await fetch(`${API_BASE_URL}/predict`, {
       method: 'POST',
       body: formData,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import CameraStreamer from './components/CameraStreamer';
+import { CameraStreamer } from './components/CameraStreamer';
 import ResultDisplay from './components/ResultDisplay';
 import { PredictionResult, getAvailableModels, ModelInfo } from './services/inferenceService';
 import { Banana, Scan, Info, ChevronDown, Cpu, Loader2 } from 'lucide-react';
