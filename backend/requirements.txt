@@ -1,6 +1,7 @@
-﻿fastapi
+fastapi
 uvicorn[standard]
 python-multipart
+ultralytics
 numpy
 opencv-python
 joblib

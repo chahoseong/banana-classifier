@@ -14,3 +14,7 @@ joblib
 matplotlib
 seaborn
 streamlit-webrtc
+fastapi
+uvicorn
+python-multipart
+ultralytics
