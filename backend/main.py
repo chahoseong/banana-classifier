@@ -12,36 +12,70 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 
+import sys
+from pathlib import Path
+
 # Set up paths
 backend_dir = Path(__file__).resolve().parent
 project_root = backend_dir.parent
-# Import BananaGatekeeper
-import sys
+
+# Add paths to sys.path
 if str(backend_dir) not in sys.path:
     sys.path.append(str(backend_dir))
-from src.inference import BananaGatekeeper
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
 
-# Global instance for the gatekeeper
+from src.inference import BananaGatekeeper
+import joblib
+from ml.src.preprocessing.image_processor import process_image
+
+# Global instances
 gatekeeper = None
+ripeness_model = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global gatekeeper
-    print("Initializing BananaGatekeeper...")
-    gatekeeper = BananaGatekeeper()
+    global gatekeeper, ripeness_model
+    print("Initializing Models...")
+    
+    # 1. Gatekeeper (YOLO)
+    gatekeeper = BananaGatekeeper(model_name='yolo26n.pt')
+    
+    # 2. Ripeness Model (scikit-learn)
+    model_path = project_root / 'ml' / 'artifacts' / 'banana_model_latest.joblib'
+    if model_path.exists():
+        ripeness_model = joblib.load(str(model_path))
+        print(f"Ripeness model loaded from {model_path}")
+    else:
+        print(f"Warning: Ripeness model not found at {model_path}")
+        
     yield
     gatekeeper = None
+    ripeness_model = None
 
 app = FastAPI(title="Banana Ripe Checker API", lifespan=lifespan)
 
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def log_requests(request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    duration = time.time() - start
+    print(f"Request: {request.method} {request.url.path} - Status: {response.status_code} - Duration: {duration:.3f}s")
+    return response
+
+@app.get("/")
+async def health_check():
+    return {"status": "ok", "message": "Banana Ripe Checker API is running"}
+
 
 class PredictionResponse(BaseModel):
     is_banana: bool
@@ -95,13 +129,36 @@ async def predict_ripeness(background_tasks: BackgroundTasks, file: UploadFile =
             message="바나나를 카메라 영역에 비춰주세요."
         )
     else:
-        # Temporary response for the actual ripeness model integration later
-        # is_banana equals True
+        # Start ripeness classification
+        status = "checking"
+        prediction_message = "바나나 인식 완료! 상태 분석 중..."
+        
+        if ripeness_model is not None:
+            try:
+                # 1. Image processing (Masking + Feature Extraction)
+                # Note: Ripeness model expects 6 features (Mean HSV, Std HSV)
+                features = process_image(image_bgr)
+                
+                # 2. Predict status
+                # Prediction returns the class name string directly if classes were provided to sklearn
+                pred_status = ripeness_model.predict(features.reshape(1, -1))[0]
+                status = str(pred_status)
+                
+                # 3. Get confidence (probability)
+                if hasattr(ripeness_model, "predict_proba"):
+                    probs = ripeness_model.predict_proba(features.reshape(1, -1))[0]
+                    confidence = float(np.max(probs))
+                
+                prediction_message = f"숙성도 분석 완료: {status}"
+            except Exception as e:
+                print(f"Ripeness prediction error: {e}")
+                prediction_message = "인식은 되었으나 숙성도 분석 중 오류가 발생했습니다."
+
         return PredictionResponse(
             is_banana=True,
-            status="checking",
-            confidence=0.8,
-            message="바나나 인식 완료! 상태 분석 중..."
+            status=status,
+            confidence=confidence,
+            message=prediction_message
         )
 
 if __name__ == "__main__":
