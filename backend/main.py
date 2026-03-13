@@ -7,7 +7,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -92,11 +92,15 @@ app.add_middleware(
 )
 
 @app.middleware("http")
-async def log_requests(request, call_next):
+async def log_requests(request: Request, call_next):
     start = time.time()
     response = await call_next(request)
     duration = time.time() - start
-    print(f"Request: {request.method} {request.url.path} - Status: {response.status_code} - Duration: {duration:.3f}s")
+    
+    # Get model info if it was set during the request
+    model_id = getattr(request.state, "model_id", "SYSTEM")
+        
+    print(f"[{model_id}] {request.method} {request.url.path} - Status: {response.status_code} - {duration:.3f}s", flush=True)
     return response
 
 @app.get("/")
@@ -108,13 +112,13 @@ async def health_check():
 async def get_models():
     return [
         {
-            "id": "baseline",
+            "id": "KNN",
             "name": "Baseline Model (KNN)",
             "description": "이미지 색상 분포를 기반으로 한 기본 분석 모델",
             "type": "classic_ml"
         },
         {
-            "id": "cnn_mobilenet",
+            "id": "CNN",
             "name": "MobileNetV2 (CNN)",
             "description": "딥러닝 알고리즘을 사용한 고정밀 분석 모델",
             "type": "deep_learning"
@@ -129,10 +133,13 @@ class PredictionResponse(BaseModel):
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_ripeness(
+    request: Request,
     background_tasks: BackgroundTasks, 
     file: UploadFile = File(...),
-    model_id: str = Form("baseline")
+    model_id: str = Form("KNN")
 ):
+    # Store model_id in request state for logging middleware
+    request.state.model_id = model_id
     start_time = time.time()
     
     if not file.content_type.startswith("image/"):
@@ -164,7 +171,6 @@ async def predict_ripeness(
         raise HTTPException(status_code=500, detail=f"Gatekeeper error: {e}")
 
     if not is_banana:
-        print(f"[Prediction] No banana detected (Confidence: {confidence:.2f})", flush=True)
         return PredictionResponse(
             is_banana=False,
             status=None,
@@ -177,7 +183,7 @@ async def predict_ripeness(
     prediction_message = f"바나나 인식 완료 ({model_id})! 상태 분석 중..."
     
     try:
-        if model_id == "cnn_mobilenet":
+        if model_id in ["CNN", "cnn_mobilenet"]:
             if ripeness_model_cnn is not None:
                 # Convert BGR to RGB PIL Image for transforms
                 image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
@@ -205,9 +211,6 @@ async def predict_ripeness(
     except Exception as e:
         print(f"Prediction error ({model_id}): {e}")
         prediction_message = f"인식은 되었으나 {model_id} 분석 중 오류가 발생했습니다."
-
-
-    print(f"[Prediction] Model: {model_id}, Result: {status}, Confidence: {confidence:.2f}", flush=True)
 
     return PredictionResponse(
         is_banana=True,
