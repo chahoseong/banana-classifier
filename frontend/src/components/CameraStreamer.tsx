@@ -4,9 +4,10 @@ import { predictBanana, PredictionResult } from '../services/inferenceService';
 interface CameraStreamerProps {
   onResult: (result: PredictionResult) => void;
   onError: (error: string) => void;
+  modelId: string;
 }
 
-const CameraStreamer: React.FC<CameraStreamerProps> = ({ onResult, onError }) => {
+const CameraStreamer: React.FC<CameraStreamerProps> = ({ onResult, onError, modelId }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -49,7 +50,7 @@ const CameraStreamer: React.FC<CameraStreamerProps> = ({ onResult, onError }) =>
       canvas.toBlob(async (blob) => {
         if (blob) {
           try {
-            const result = await predictBanana(blob);
+            const result = await predictBanana(blob, modelId);
             onResult(result);
             
             // 협업 가이드 가이드: 성공 후 500ms 대기 후 다음 자동 호출
@@ -66,7 +67,7 @@ const CameraStreamer: React.FC<CameraStreamerProps> = ({ onResult, onError }) =>
         }
       }, 'image/jpeg', 0.8);
     }
-  }, [isStreaming, isProcessing, onResult, onError]);
+  }, [isStreaming, isProcessing, onResult, onError, modelId]);
 
   useEffect(() => {
     startCamera();

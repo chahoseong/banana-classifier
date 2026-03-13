@@ -7,9 +7,10 @@ export interface PredictionResult {
 
 const API_BASE_URL = 'http://127.0.0.1:8000'; // Use IP instead of localhost for Windows reliability
 
-export async function predictBanana(imageBlob: Blob): Promise<PredictionResult> {
+export async function predictBanana(imageBlob: Blob, modelId: string = 'baseline'): Promise<PredictionResult> {
   const formData = new FormData();
   formData.append('file', imageBlob, 'capture.jpg');
+  formData.append('model_id', modelId);
 
   try {
     const response = await fetch(`${API_BASE_URL}/predict`, {

@@ -2,11 +2,17 @@ import { useState } from 'react';
 import CameraStreamer from './components/CameraStreamer';
 import ResultDisplay from './components/ResultDisplay';
 import { PredictionResult } from './services/inferenceService';
-import { Banana, Scan, Info } from 'lucide-react';
+import { Banana, Scan, Info, ChevronDown, Cpu } from 'lucide-react';
+
+const AVAILABLE_MODELS = [
+  { id: 'baseline', name: 'Baseline (KNN)', description: '기본 색상 분석 모델' },
+  { id: 'cnn_mobilenet', name: 'MobileNetV2 (CNN)', description: '딥러닝 고정밀 모델' },
+];
 
 function App() {
   const [result, setResult] = useState<PredictionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState(AVAILABLE_MODELS[0].id);
 
   const handleResult = (newResult: PredictionResult) => {
     setResult(newResult);
@@ -50,9 +56,35 @@ function App() {
           </p>
         </section>
 
+        {/* Model Selection UI */}
+        <section className="mb-8 max-w-[500px] mx-auto w-full">
+          <div className="bg-slate-800/40 border border-white/5 rounded-2xl p-4 backdrop-blur-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-slate-300 text-xs font-semibold uppercase tracking-wider">
+                <Cpu className="w-3.5 h-3.5 text-yellow-500" />
+                Select AI Model
+              </div>
+            </div>
+            <div className="relative group">
+              <select 
+                value={selectedModelId}
+                onChange={(e) => setSelectedModelId(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-xl px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500/50 transition-all cursor-pointer"
+              >
+                {AVAILABLE_MODELS.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name} - {model.description}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none group-focus-within:text-yellow-500 transition-colors" />
+            </div>
+          </div>
+        </section>
+
         {/* Camera Section */}
         <div className="flex flex-col items-center">
-          <CameraStreamer onResult={handleResult} onError={handleError} />
+          <CameraStreamer onResult={handleResult} onError={handleError} modelId={selectedModelId} />
           
           {/* Result Display */}
           <ResultDisplay result={result} error={error} />
